@@ -2,6 +2,7 @@ package model
 
 // Stats 系统状态
 type Stats struct {
+	CreateTime int64
 	Memory
 	Disks []Disk
 }

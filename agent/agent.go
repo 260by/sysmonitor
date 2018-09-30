@@ -23,34 +23,36 @@ func main()  {
 
 	for {
 		tcpAddr, err := net.ResolveTCPAddr("tcp", *addr)
-		checkError(err)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 		conn, err := net.DialTCP("tcp", nil, tcpAddr)
-		checkError(err)
+		if err !=nil {
+			fmt.Println("Connect to Server error: ", err)
+			time.Sleep(time.Second * 120)
+			continue
+		}
 
 		var statsList []model.Stats
-		var stats model.Stats
-		getDisk(&stats)
-		getMem(&stats)
+		for i := 0; i < 2; i++ {
+			var stats model.Stats
+			stats.CreateTime = time.Now().Unix()
+			getDisk(&stats)
+			getMem(&stats)
+			statsList = append(statsList, stats)
+			time.Sleep(time.Second * 15)
+		}
 		
-		// enc := gob.NewEncoder(conn)
-		// err = enc.Encode(statsList)
-		// checkError(err)
-
-		time.Sleep(time.Second * 15)
+		fmt.Println(statsList)
+		enc := gob.NewEncoder(conn)
+		err = enc.Encode(statsList)
+		if err != nil {
+			fmt.Println("Send monitor data to server error: ", err)
+			continue
+		}
+		conn.Close()
 	}
-
-	// tcpAddr, err := net.ResolveTCPAddr("tcp", *addr)
-	// checkError(err)
-	// conn, err := net.DialTCP("tcp", nil, tcpAddr)
-	// checkError(err)
-
-	// // _, err = conn.Write([]byte("Hello World!")) // send string
-	// enc := gob.NewEncoder(conn)
-	// err = enc.Encode(employee)
-	// checkError(err)
-
-	// conn.Close()
-	// os.Exit(0)
 }
 
 func checkError(err error)  {
