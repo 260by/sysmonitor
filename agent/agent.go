@@ -4,11 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"os"
+	// "os"
 	"time"
 	"encoding/gob"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/disk"
+	"github.com/shirou/gopsutil/host"
+	"github.com/shirou/gopsutil/cpu"
 	"github.com/260by/sysmonitor/model"
 	// "strconv"
 	// "time"
@@ -38,6 +40,23 @@ func main()  {
 		for i := 0; i < 2; i++ {
 			var stats model.Stats
 			stats.CreateTime = time.Now().Unix()
+			hostStats, err := host.Info()
+			if err != nil {
+				fmt.Println("Get host info err: ", err)
+				continue
+			}
+			stats.HostName = hostStats.Hostname
+			// cpuStats, err := cpu.Info()
+			// if err != nil {
+			// 	fmt.Println("Get CPU info err: ", err)
+			// 	continue
+			// }
+			cpuPercent, err := cpu.Percent(0, false)
+			if err != nil {
+				fmt.Println("Get CPU percent err: ", err)
+				continue
+			}
+			stats.CPUPercent = cpuPercent[0]
 			getDisk(&stats)
 			getMem(&stats)
 			statsList = append(statsList, stats)
@@ -52,13 +71,6 @@ func main()  {
 			continue
 		}
 		conn.Close()
-	}
-}
-
-func checkError(err error)  {
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
-		os.Exit(1)
 	}
 }
 

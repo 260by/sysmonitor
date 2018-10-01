@@ -3,6 +3,8 @@ package model
 // Stats 系统状态
 type Stats struct {
 	CreateTime int64
+	HostName string
+	CPUPercent float64
 	Memory
 	Disks []Disk
 }
