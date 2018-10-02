@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"encoding/gob"
 	"github.com/260by/sysmonitor/model"
 )
@@ -35,12 +36,14 @@ func main()  {
 
 func handleRequest(conn net.Conn)  {
 	// var employees = []Employee{}
-	var statsList []model.Stats
+	var monitors []model.Monitor
 	dec := gob.NewDecoder(conn)
-	err := dec.Decode(&statsList)
+	err := dec.Decode(&monitors)
 	checkError(err)
-	for _, stats := range statsList {
-		fmt.Println(stats)
+	for _, monitor := range monitors {
+		rAddr := conn.RemoteAddr()
+		monitor.IP = strings.Split(rAddr.String(), ":")[0]
+		fmt.Println(monitor)
 	}
 	
 	conn.Close()

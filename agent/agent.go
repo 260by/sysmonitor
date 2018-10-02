@@ -4,13 +4,14 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	// "os"
+	"os"
 	"time"
 	"encoding/gob"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/cpu"
+	// psnet "github.com/shirou/gopsutil/net"
 	"github.com/260by/sysmonitor/model"
 	// "strconv"
 	// "time"
@@ -36,36 +37,20 @@ func main()  {
 			continue
 		}
 
-		var statsList []model.Stats
+		var monitors []model.Monitor
 		for i := 0; i < 2; i++ {
-			var stats model.Stats
-			stats.CreateTime = time.Now().Unix()
-			hostStats, err := host.Info()
-			if err != nil {
-				fmt.Println("Get host info err: ", err)
-				continue
-			}
-			stats.HostName = hostStats.Hostname
-			// cpuStats, err := cpu.Info()
-			// if err != nil {
-			// 	fmt.Println("Get CPU info err: ", err)
-			// 	continue
-			// }
-			cpuPercent, err := cpu.Percent(0, false)
-			if err != nil {
-				fmt.Println("Get CPU percent err: ", err)
-				continue
-			}
-			stats.CPUPercent = cpuPercent[0]
-			getDisk(&stats)
-			getMem(&stats)
-			statsList = append(statsList, stats)
+			var monitor model.Monitor
+			monitor.CreateTime = time.Now().Unix()
+
+			getMonitorData(&monitor)
+			// getIP(&monitor)
+			monitors = append(monitors, monitor)
 			time.Sleep(time.Second * 15)
 		}
 		
-		fmt.Println(statsList)
+		fmt.Println(monitors)
 		enc := gob.NewEncoder(conn)
-		err = enc.Encode(statsList)
+		err = enc.Encode(monitors)
 		if err != nil {
 			fmt.Println("Send monitor data to server error: ", err)
 			continue
@@ -74,34 +59,62 @@ func main()  {
 	}
 }
 
-func getMem(stats *model.Stats)  {
+func getMonitorData(monitor *model.Monitor)  {
+	getHostName(monitor)
+	getCPU(monitor)
+	getMem(monitor)
+	getDisk(monitor)
+}
+
+func getHostName(monitor *model.Monitor)  {
+	hostStats, err := host.Info()
+	if err != nil {
+		fmt.Println("Get host info err: ", err)
+		return
+	}
+	monitor.HostName = hostStats.Hostname
+}
+
+func getCPU(monitor *model.Monitor)  {
+	cpuPercent, err := cpu.Percent(0, false)
+	if err != nil {
+		fmt.Println("Get CPU percent err: ", err)
+		return
+	}
+	monitor.CPUPercent = cpuPercent[0]
+}
+
+func getMem(monitor *model.Monitor)  {
 	m, err := mem.VirtualMemory()
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	stats.Memory.Total = m.Total
-	stats.Memory.Free = m.Free
-	stats.Memory.UsePercent = m.UsedPercent
+	monitor.MemoryPercent = m.UsedPercent
 }
 
-func getDisk(stats *model.Stats)  {
+func getDisk(monitor *model.Monitor)  {
 	partition, _ := disk.Partitions(true)
 
 	for _, p := range partition {
-		var d model.Disk
 		if p.Fstype == "ext3" || p.Fstype == "ext4" || p.Fstype == "xfs" {
 			diskInfo, err := disk.Usage(p.Mountpoint)
 			if err != nil {
 				panic(err)
 			}
-			d.MountPoint = p.Mountpoint
-			d.Total = diskInfo.Total
-			d.Free = diskInfo.Free
-			d.Used = diskInfo.Used
-			d.UsePercent = diskInfo.UsedPercent
-			stats.Disks = append(stats.Disks, d)
-			// fmt.Printf("挂载点:%s\n磁盘总容量:%v\n使用容量:%v\n使用率:%.2f%%\n", p.Mountpoint, diskInfo.Total>>30, diskInfo.Used>>30,diskInfo.UsedPercent)
+			
+			monitor.DisksPercent += fmt.Sprintf("%s:%v ", p.Mountpoint, diskInfo.UsedPercent)
 		}
 	}
+}
+
+func getIP(monitor *model.Monitor)  {
+	// interStats, err := psnet.Interfaces()
+	// if err != nil {
+	// 	fmt.Println("Get interfaces err: ", err)
+	// 	return
+	// }
+
+	// fmt.Println(psnet.Connections(kind))1
+	os.Exit(0)
 }
