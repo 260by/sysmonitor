@@ -2,22 +2,64 @@ package main
 
 import (
 	"fmt"
+	"flag"
 	"net"
 	"os"
-	"strings"
+	// "strings"
 	"encoding/gob"
 	"github.com/260by/sysmonitor/model"
+	"github.com/260by/tools/gconfig"
+	"github.com/go-xorm/xorm"
 )
 
 const (
-	connHost = ""
-	connPort = "5000"
+	// connHost = ""
+	// connPort = "5000"
 	connType = "tcp"
-	msgLength = 1024
+	// msgLength = 1024
 )
 
+type Config struct {
+	Monitor struct {
+		IP string
+		Port int
+	}
+	Database struct {
+		Driver string
+		Dsn string
+		ShowSQL bool
+		Migrate bool
+	}
+}
+
 func main()  {
-	address := fmt.Sprintf("%s:%s", connHost, connPort)
+	var configFile = flag.String("config", "config.toml", "Configration file")
+	var migrate = flag.Bool("migrate", false, "Sync database table structure")
+	flag.Parse()
+
+	var config = Config{}
+	err := gconfig.Parse(*configFile, &config)
+	if err != nil {
+		panic(err)
+	}
+
+	// 同步数据结构
+	if *migrate {
+		orm, err := model.Connect(config.Database.Driver, config.Database.Dsn, config.Database.ShowSQL)
+		if err != nil {
+			panic(err)
+		}
+		err = model.Migrate(orm)
+		if err != nil {
+			panic(err)
+		}
+		if err == nil {
+			fmt.Println("Sync database table structure is success.")
+			os.Exit(0)
+		}
+	}
+
+	address := fmt.Sprintf("%s:%v", config.Monitor.IP, config.Monitor.Port)
 	tcpAddr, err := net.ResolveTCPAddr("tcp", address)
 	checkError(err)
 	listener, err := net.ListenTCP("tcp", tcpAddr)
@@ -25,26 +67,36 @@ func main()  {
 	defer listener.Close()
 
 	for {
+		// 连接数据库
+		orm, err := model.Connect(config.Database.Driver, config.Database.Dsn, config.Database.ShowSQL)
+		if err != nil {
+			panic(err)
+		}
+
 		conn, err := listener.Accept()
 		if err != nil {
 			continue
 		}
-		handleRequest(conn)
+		handleRequest(conn, orm)
 	}
 
 }
 
-func handleRequest(conn net.Conn)  {
+func handleRequest(conn net.Conn, orm *xorm.Engine)  {
 	// var employees = []Employee{}
 	var monitors []model.Monitor
 	dec := gob.NewDecoder(conn)
 	err := dec.Decode(&monitors)
-	checkError(err)
+	if err != nil {
+		fmt.Println("Accept data err: ", err)
+	}
 	for _, monitor := range monitors {
-		rAddr := conn.RemoteAddr()
-		monitor.IP = strings.Split(rAddr.String(), ":")[0]
+		// rAddr := conn.RemoteAddr()
+		// monitor.IP = strings.Split(rAddr.String(), ":")[0]
 		fmt.Println(monitor)
 	}
+	orm.Insert(&monitors)
+	orm.Close()
 	
 	conn.Close()
 }
