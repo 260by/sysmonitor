@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"flag"
 	"net"
+	"net/http"
 	"os"
 	// "strings"
 	"encoding/gob"
@@ -26,6 +27,10 @@ type Config struct {
 		Dsn string
 		ShowSQL bool
 		Migrate bool
+	}
+	HTTPServer struct {
+		IP string
+		Port int
 	}
 }
 
@@ -81,6 +86,9 @@ func main()  {
 	checkError(err)
 	defer listener.Close()
 
+	httpListenAddr := fmt.Sprintf("%s:%v", config.HTTPServer.IP, config.HTTPServer.Port)
+	go startWebServer(httpListenAddr)
+	
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -119,5 +127,15 @@ func checkError(err error)  {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
 		os.Exit(1)
+	}
+}
+
+func startWebServer(address string)  {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request)  {
+		fmt.Fprintf(w, "Hello world\n")
+	})
+	err := http.ListenAndServe(address, nil)
+	if err != nil {
+		panic(err)
 	}
 }
