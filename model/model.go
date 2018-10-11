@@ -4,6 +4,7 @@ import (
 	"github.com/go-xorm/xorm"
 	"github.com/go-xorm/core"
 	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // User 用户数据表
@@ -18,6 +19,7 @@ type Assets struct {
 	ID         int    `xorm:"pk autoincr notnull"`
 	IP         string `xorm:"notnull unique"`
 	HostName   string `xorm:"notnull unique"`
+	AgentState string
 }
 
 // Monitor 系统状态
@@ -54,4 +56,30 @@ func Migrate(orm *xorm.Engine,) error {
 		return err
 	}
 	return nil
+}
+
+// InitUser 初始化admin用户
+func InitUser(orm *xorm.Engine) error {
+	hashPassword, err := generatePassword("admin")
+	if err != nil {
+		return err
+	}
+	_, err = orm.Insert(&User{UserName: "admin", Password: string(hashPassword)})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// 生成一个hashed密码
+func generatePassword(userPassword string) ([]byte, error) {
+	return bcrypt.GenerateFromPassword([]byte(userPassword), bcrypt.DefaultCost)
+}
+
+// 检查密码是否匹配。
+func validatePassword(userPassword string, hashed []byte) (bool, error) {
+	if err := bcrypt.CompareHashAndPassword(hashed, []byte(userPassword)); err != nil {
+		return false, err
+	}
+	return true, nil
 }

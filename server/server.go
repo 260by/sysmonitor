@@ -9,14 +9,11 @@ import (
 	"encoding/gob"
 	"github.com/260by/sysmonitor/model"
 	"github.com/260by/tools/gconfig"
-	"github.com/go-xorm/xorm"
+	// "github.com/go-xorm/xorm"
 )
 
 const (
-	// connHost = ""
-	// connPort = "5000"
 	connType = "tcp"
-	// msgLength = 1024
 )
 
 type Config struct {
@@ -35,6 +32,7 @@ type Config struct {
 func main()  {
 	var configFile = flag.String("config", "config.toml", "Configration file")
 	var migrate = flag.Bool("migrate", false, "Sync database table structure")
+	var initUser = flag.Bool("init", false, "Init admin user")
 	flag.Parse()
 
 	var config = Config{}
@@ -57,6 +55,23 @@ func main()  {
 			fmt.Println("Sync database table structure is success.")
 			os.Exit(0)
 		}
+		defer orm.Close()
+	}
+
+	if *initUser {
+		orm, err := model.Connect(config.Database.Driver, config.Database.Dsn, config.Database.ShowSQL)
+		if err != nil {
+			panic(err)
+		}
+		err = model.InitUser(orm)
+		if err != nil {
+			panic(err)
+		}
+		if err == nil {
+			fmt.Println("Init admin user is success.")
+			os.Exit(0)
+		}
+		defer orm.Close()
 	}
 
 	address := fmt.Sprintf("%s:%v", config.Monitor.IP, config.Monitor.Port)
@@ -67,26 +82,25 @@ func main()  {
 	defer listener.Close()
 
 	for {
-		// 连接数据库
-		orm, err := model.Connect(config.Database.Driver, config.Database.Dsn, config.Database.ShowSQL)
-		if err != nil {
-			panic(err)
-		}
-
 		conn, err := listener.Accept()
 		if err != nil {
 			continue
 		}
-		handleRequest(conn, orm)
+		handleRequest(conn, config)
 	}
 
 }
 
-func handleRequest(conn net.Conn, orm *xorm.Engine)  {
-	// var employees = []Employee{}
+func handleRequest(conn net.Conn, config Config)  {
+	// 连接数据库
+	orm, err := model.Connect(config.Database.Driver, config.Database.Dsn, config.Database.ShowSQL)
+	if err != nil {
+		panic(err)
+	}
+
 	var monitors []model.Monitor
 	dec := gob.NewDecoder(conn)
-	err := dec.Decode(&monitors)
+	err = dec.Decode(&monitors)
 	if err != nil {
 		fmt.Println("Accept data err: ", err)
 	}
