@@ -87,7 +87,7 @@ func main()  {
 	defer listener.Close()
 
 	httpListenAddr := fmt.Sprintf("%s:%v", config.HTTPServer.IP, config.HTTPServer.Port)
-	go startWebServer(httpListenAddr)
+	go startWebServer(httpListenAddr, config)
 
 	for {
 		conn, err := listener.Accept()
@@ -130,15 +130,17 @@ func checkError(err error)  {
 	}
 }
 
-func startWebServer(address string)  {
+func startWebServer(address string, config Config)  {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request)  {
 		fmt.Fprintf(w, "Hello world\n")
 	})
-	server := http.Server{
-		Addr: address,
+
+	http.HandleFunc("/api/assets", func(w http.ResponseWriter, r *http.Request)  {
+		fmt.Fprintln(w, "assets list")
+	})
+	
+	err := http.ListenAndServe(address, nil)
+	if err != nil {
+		panic(err)
 	}
-	server.ListenAndServe()
-	// if err != nil {
-	// 	panic(err)
-	// }
 }
