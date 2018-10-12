@@ -88,7 +88,7 @@ func main()  {
 
 	httpListenAddr := fmt.Sprintf("%s:%v", config.HTTPServer.IP, config.HTTPServer.Port)
 	go startWebServer(httpListenAddr)
-	
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -134,8 +134,11 @@ func startWebServer(address string)  {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request)  {
 		fmt.Fprintf(w, "Hello world\n")
 	})
-	err := http.ListenAndServe(address, nil)
-	if err != nil {
-		panic(err)
+	server := http.Server{
+		Addr: address,
 	}
+	server.ListenAndServe()
+	// if err != nil {
+	// 	panic(err)
+	// }
 }
