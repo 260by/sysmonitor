@@ -9,46 +9,26 @@ import (
 	// "strings"
 	"encoding/gob"
 	"github.com/260by/sysmonitor/model"
-	"github.com/260by/tools/gconfig"
 	// "github.com/go-xorm/xorm"
+	"github.com/260by/sysmonitor/server/handlefunc"
+	"github.com/260by/sysmonitor/config"
 )
 
-const (
-	connType = "tcp"
-)
-
-type Config struct {
-	Monitor struct {
-		IP string
-		Port int
-	}
-	Database struct {
-		Driver string
-		Dsn string
-		ShowSQL bool
-		Migrate bool
-	}
-	HTTPServer struct {
-		IP string
-		Port int
-	}
-}
+var configFile = flag.String("config", "config.toml", "Configration file")
+var migrate = flag.Bool("migrate", false, "Sync database table structure")
+var initUser = flag.Bool("init", false, "Init admin user")
 
 func main()  {
-	var configFile = flag.String("config", "config.toml", "Configration file")
-	var migrate = flag.Bool("migrate", false, "Sync database table structure")
-	var initUser = flag.Bool("init", false, "Init admin user")
 	flag.Parse()
 
-	var config = Config{}
-	err := gconfig.Parse(*configFile, &config)
+	conf, err := config.Parse(*configFile)
 	if err != nil {
 		panic(err)
 	}
 
 	// 同步数据结构
 	if *migrate {
-		orm, err := model.Connect(config.Database.Driver, config.Database.Dsn, config.Database.ShowSQL)
+		orm, err := model.Connect(conf.Database.Driver, conf.Database.Dsn, conf.Database.ShowSQL)
 		if err != nil {
 			panic(err)
 		}
@@ -64,7 +44,7 @@ func main()  {
 	}
 
 	if *initUser {
-		orm, err := model.Connect(config.Database.Driver, config.Database.Dsn, config.Database.ShowSQL)
+		orm, err := model.Connect(conf.Database.Driver, conf.Database.Dsn, conf.Database.ShowSQL)
 		if err != nil {
 			panic(err)
 		}
@@ -78,30 +58,31 @@ func main()  {
 		}
 		defer orm.Close()
 	}
-
-	address := fmt.Sprintf("%s:%v", config.Monitor.IP, config.Monitor.Port)
-	tcpAddr, err := net.ResolveTCPAddr("tcp", address)
-	checkError(err)
-	listener, err := net.ListenTCP("tcp", tcpAddr)
-	checkError(err)
+	
+	httpAddr := fmt.Sprintf("%s:%v", conf.HTTPServer.IP, conf.HTTPServer.Port)
+	go startWebServer(httpAddr)
+	
+	tcpAddr := fmt.Sprintf("%s:%v", conf.Monitor.IP, conf.Monitor.Port)
+	listener, err := net.Listen("tcp", tcpAddr)
+	fmt.Printf("Starting server...\nListening on %s.\n", tcpAddr)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	defer listener.Close()
-
-	httpListenAddr := fmt.Sprintf("%s:%v", config.HTTPServer.IP, config.HTTPServer.Port)
-	go startWebServer(httpListenAddr, config)
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			continue
 		}
-		handleRequest(conn, config)
+		go handleConnection(conn, conf)
 	}
-
 }
 
-func handleRequest(conn net.Conn, config Config)  {
+func handleConnection(conn net.Conn, c *config.Config)  {
 	// 连接数据库
-	orm, err := model.Connect(config.Database.Driver, config.Database.Dsn, config.Database.ShowSQL)
+	orm, err := model.Connect(c.Database.Driver, c.Database.Dsn, c.Database.ShowSQL)
 	if err != nil {
 		panic(err)
 	}
@@ -119,28 +100,19 @@ func handleRequest(conn net.Conn, config Config)  {
 	}
 	orm.Insert(&monitors)
 	orm.Close()
-	
-	conn.Close()
 }
 
-func checkError(err error)  {
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
-		os.Exit(1)
-	}
-}
-
-func startWebServer(address string, config Config)  {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request)  {
-		fmt.Fprintf(w, "Hello world\n")
-	})
+func startWebServer(addr string) {
+	http.HandleFunc("/", handlefunc.Index)
 
 	http.HandleFunc("/api/assets", func(w http.ResponseWriter, r *http.Request)  {
 		fmt.Fprintln(w, "assets list")
 	})
 	
-	err := http.ListenAndServe(address, nil)
+	err := http.ListenAndServe(addr, nil)
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+		return
 	}
+	fmt.Printf("Listening on %s.", addr)
 }
